@@ -1,0 +1,229 @@
+# Azure Pipelines YAML Sample for Testing YAML Formatter
+# This file contains various YAML structures to test formatting functionality
+
+trigger:
+- main
+- develop
+- feature/*
+
+variables:
+  buildConfiguration: 'Release'
+  vmImageName: 'ubuntu-latest'
+  projectPath: 'src/MyApp'
+  artifactName: 'drop'
+
+pool:
+  vmImage: $(vmImageName)
+
+stages:
+- stage: Build
+  displayName: 'Build and Test'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build Application'
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Install .NET SDK'
+      inputs:
+        packageType: 'sdk'
+        version: '8.x'
+        installationPath: $(Agent.ToolsDirectory)/dotnet
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore NuGet packages'
+      inputs:
+        command: 'restore'
+        projects: '$(projectPath)/**/*.csproj'
+        feedsToUse: 'select'
+        verbosityRestore: 'Minimal'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build solution'
+      inputs:
+        command: 'build'
+        projects: '$(projectPath)/**/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Run unit tests'
+      inputs:
+        command: 'test'
+        projects: '$(projectPath)/**/*Tests.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage" --logger trx'
+        publishTestResults: true
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish code coverage'
+      inputs:
+        codeCoverageTool: 'Cobertura'
+        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish application'
+      inputs:
+        command: 'publish'
+        projects: '$(projectPath)/**/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+        zipAfterPublish: true
+        modifyOutputPath: false
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish artifacts'
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: '$(artifactName)'
+        publishLocation: 'Container'
+
+- stage: SecurityScan
+  displayName: 'Security and Quality Scan'
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - job: SecurityScanJob
+    displayName: 'Run Security Scans'
+    steps:
+    - task: SonarCloudPrepare@1
+      displayName: 'Prepare SonarCloud analysis'
+      inputs:
+        SonarCloud: 'SonarCloud'
+        organization: 'my-organization'
+        scannerMode: 'MSBuild'
+        projectKey: 'my-project-key'
+        projectName: 'My Project'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build for analysis'
+      inputs:
+        command: 'build'
+        projects: '$(projectPath)/**/*.csproj'
+
+    - task: SonarCloudAnalyze@1
+      displayName: 'Run SonarCloud analysis'
+
+    - task: SonarCloudPublish@1
+      displayName: 'Publish SonarCloud results'
+      inputs:
+        pollingTimeoutSec: '300'
+
+- stage: Deploy
+  displayName: 'Deploy to Environment'
+  dependsOn: 
+  - Build
+  - SecurityScan
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  variables:
+  - group: Production-Variables
+  jobs:
+  - deployment: DeployToProduction
+    displayName: 'Deploy to Production'
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: $(artifactName)
+            displayName: 'Download artifacts'
+
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Azure Web App'
+            inputs:
+              azureSubscription: 'Azure-Production'
+              appType: 'webApp'
+              appName: 'my-web-app-prod'
+              package: '$(Pipeline.Workspace)/$(artifactName)/**/*.zip'
+              deploymentMethod: 'auto'
+
+          - task: AzureAppServiceManage@0
+            displayName: 'Restart Azure Web App'
+            inputs:
+              azureSubscription: 'Azure-Production'
+              action: 'Restart Azure App Service'
+              webAppName: 'my-web-app-prod'
+
+# Additional complex YAML structures for testing
+resources:
+  repositories:
+  - repository: templates
+    type: git
+    name: MyProject/pipeline-templates
+    ref: refs/heads/main
+
+extends:
+  template: azure-pipelines-template.yml@templates
+  parameters:
+    environments:
+    - name: 'dev'
+      serviceConnection: 'Azure-Dev'
+      webAppName: 'my-web-app-dev'
+    - name: 'staging'
+      serviceConnection: 'Azure-Staging'
+      webAppName: 'my-web-app-staging'
+    - name: 'production'
+      serviceConnection: 'Azure-Production'
+      webAppName: 'my-web-app-prod'
+
+# Test various YAML data types and structures
+parameters:
+- name: environment
+  displayName: 'Target Environment'
+  type: string
+  default: 'dev'
+  values:
+  - dev
+  - staging
+  - production
+
+- name: runTests
+  displayName: 'Run Tests'
+  type: boolean
+  default: true
+
+- name: buildNumber
+  displayName: 'Build Number'
+  type: number
+  default: 1
+
+- name: configurations
+  displayName: 'Build Configurations'
+  type: object
+  default:
+    debug:
+      optimization: false
+      symbols: true
+    release:
+      optimization: true
+      symbols: false
+
+# Test multiline strings and complex nested structures
+# Additional variables for testing complex structures
+name: 'BuildPipeline-$(Date:yyyyMMdd)$(Rev:.r)'
+
+pr:
+  branches:
+    include:
+    - main
+    - develop
+  paths:
+    exclude:
+    - docs/*
+    - README.md
+
+# Test complex variable definitions
+variables:
+- name: multilineScript
+  value: |
+    echo "This is a multiline script"
+    echo "Testing YAML formatting"
+    if [ "$BUILD_REASON" == "PullRequest" ]; then
+      echo "This is a pull request build"
+    else
+      echo "This is a regular build"
+    fi
+
+- name: complexObject
+  value: '{"database":{"connectionString":"Server=localhost;Database=MyApp;Integrated Security=true;","timeout":30,"pooling":true},"logging":{"level":"Information","providers":["Console","File","ApplicationInsights"]},"features":{"enableCaching":true,"enableMetrics":false,"maxRetries":3}}'
+
+# Additional test variables with different formats
+- group: 'shared-variables'
+- template: 'variables/common-vars.yml'

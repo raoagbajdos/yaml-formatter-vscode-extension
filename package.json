@@ -1,0 +1,80 @@
+{
+  "name": "yaml-formatter",
+  "displayName": "YAML Formatter",
+  "description": "Format YAML and YML files with ease",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Formatters"
+  ],
+  "activationEvents": [
+    "onLanguage:yaml"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "yaml",
+        "aliases": ["YAML", "yaml"],
+        "extensions": [".yaml", ".yml"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "yamlFormatter.format",
+        "title": "Format YAML",
+        "category": "YAML Formatter"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "yamlFormatter.format",
+        "key": "shift+alt+f",
+        "when": "editorTextFocus && resourceExtname =~ /\\.(yaml|yml)$/"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "YAML Formatter",
+      "properties": {
+        "yamlFormatter.indentSize": {
+          "type": "number",
+          "default": 2,
+          "description": "Number of spaces for indentation"
+        },
+        "yamlFormatter.preserveComments": {
+          "type": "boolean",
+          "default": true,
+          "description": "Preserve comments when formatting"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "@types/mocha": "^10.0.1",
+    "@types/glob": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.3.0",
+    "eslint": "^8.28.0",
+    "glob": "^8.0.3",
+    "mocha": "^10.1.0",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "yaml": "^2.3.4"
+  }
+}
